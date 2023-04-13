@@ -706,7 +706,7 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
         losses = output_tensor.float()
         loss_mask = loss_mask.view(-1).float()
         # TODO: add nemo version here
-        loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()  # sequence level nll
+        loss = torch.sum(losses.view(-1))  # sequence level nll
         return loss
 
     def build_train_valid_test_datasets(self):

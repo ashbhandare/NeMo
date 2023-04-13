@@ -91,15 +91,20 @@ class MegatronGPTPromptLearningModel(MegatronBasePromptLearningModel):
 
     def init_model(self, cfg: DictConfig, trainer: Trainer):
         self.cfg = cfg
-        save_restore_connector = NLPSaveRestoreConnector()
-        if os.path.isdir(cfg.get('language_model_path')):
-            save_restore_connector.model_extracted_dir = cfg.get('language_model_path')
-        frozen_model_cfg = MegatronGPTModel.restore_from(
-            cfg.get('language_model_path'),
-            trainer=trainer,
-            return_config=True,
-            save_restore_connector=save_restore_connector,
-        )
+        # save_restore_connector = NLPSaveRestoreConnector()
+        # if os.path.isdir(cfg.get('language_model_path')):
+        #     save_restore_connector.model_extracted_dir = cfg.get('language_model_path')
+
+        # frozen_model_cfg = MegatronGPTModel.restore_from(
+        #     cfg.get('language_model_path'),
+        #     trainer=trainer,
+        #     return_config=True,
+        #     save_restore_connector=save_restore_connector,
+        # )
+
+        from omegaconf import OmegaConf
+        frozen_model_cfg = OmegaConf.load(cfg.get('config_path'))
+        frozen_model_cfg = frozen_model_cfg.model
 
         # Need to overwrite some params in frozen model's config before restoring
         with open_dict(frozen_model_cfg):
@@ -126,13 +131,18 @@ class MegatronGPTPromptLearningModel(MegatronBasePromptLearningModel):
         else:
             raise ValueError('precision must be in [32, 16, "bf16"]')
 
-        if cfg.get('language_model_path', None):
-            self.frozen_model = MegatronGPTModel.restore_from(
-                cfg.get('language_model_path'),
-                trainer=trainer,
-                save_restore_connector=save_restore_connector,
-                override_config_path=frozen_model_cfg,
-            ).to(dtype=self.autocast_dtype)
+        # if cfg.get('language_model_path', None):
+        #     self.frozen_model = MegatronGPTModel.restore_from(
+        #         cfg.get('language_model_path'),
+        #         trainer=trainer,
+        #         save_restore_connector=save_restore_connector,
+        #         override_config_path=frozen_model_cfg,
+        #     ).to(dtype=self.autocast_dtype)
+
+        self.frozen_model = MegatronGPTModel(
+            cfg=frozen_model_cfg,
+            trainer=trainer,
+        ).to(dtype=self.autocast_dtype)
 
         self.megatron_amp_o2 = self.cfg.get('megatron_amp_O2', False)
         self.pipeline_parallel = self.cfg.get('pipeline_model_parallel_size', 1) > 1
@@ -401,6 +411,12 @@ class MegatronGPTPromptLearningModel(MegatronBasePromptLearningModel):
         averaged_loss = average_losses_across_data_parallel_group(outputs)
         logging.info(f'test_loss: {averaged_loss[0]}')
 
+    def setup(self, stage=None):
+        super().setup()
+        
+        if self.frozen_model.cfg.get('transformer_engine', False):
+            self.frozen_model.setup_transformer_engine_tp_groups()
+
     def setup_training_data(self, training_data_config=None):
         if self.cfg.data.get('train_ds', None):
             max_seq_length = self.frozen_model.cfg.encoder_seq_length
@@ -526,7 +542,7 @@ class MegatronGPTPromptLearningModel(MegatronBasePromptLearningModel):
             drop_last=drop_last,
             num_workers=num_workers,
             pin_memory=pin_memory,
-            persistent_workers=True,  # (@adithyare and @eharper) We need this to make spawn=True to work.
+            persistent_workers=False,  # (@adithyare and @eharper) We need this to make spawn=True to work.
         )
 
         return dataset, dataloader

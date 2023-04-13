@@ -164,6 +164,7 @@ class GPTPromptLearningDataset(Dataset):
                 input_ids = input_ids + [self.tokenizer.eos_id]
 
             # Try to truncate input text to fit into the max sequence length
+            self.max_seq_length = 512 + 1
             if len(input_ids) > self.max_seq_length:
                 input_ids = self._truncate_input(
                     truncation_field,
@@ -343,6 +344,7 @@ class GPTPromptLearningDataset(Dataset):
 
         # Get max sequence length of batch
         batch_max = max(len(ids) for ids in input_ids)
+        batch_max = 512 + 1
 
         if tp_workers > 1:
             # more sure the sequence length is multiply of number of tp_workers, needed for sequence parallel.
@@ -385,13 +387,21 @@ class GPTPromptLearningDataset(Dataset):
 
             # Pad to max length
             input_length = len(ids)
-            padding_length = batch_max - input_length
-            pad_extend = [self.pad_token_id] * padding_length
-            ids = ids + pad_extend
-            padded_input_ids.append(ids)
+            if input_length < batch_max:
+                padding_length = batch_max - input_length	
+                pad_extend = [self.pad_token_id] * padding_length	
+                ids = ids + pad_extend
+                padded_input_ids.append(ids)	
+                loss_mask.extend([0.0] * padding_length)
 
-            # Account for padding in loss mask
-            loss_mask.extend([0.0] * padding_length)
+            elif input_length > batch_max:
+                del ids[batch_max:]
+                del loss_mask[batch_max:]
+
+            else:
+                padded_input_ids.append(ids)	
+
+            # Account for padding in loss mask	
             batch_loss_masks.append(torch.tensor(loss_mask, dtype=torch.float))
 
         # Make into torch tensors
