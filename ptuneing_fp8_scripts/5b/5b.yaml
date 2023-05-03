@@ -1,10 +1,10 @@
 model:
 
   # model parallelism: MBS=2, TPS=2, AGB=8 for 80GB nodes. 
-  micro_batch_size: 64
-  global_batch_size: 2048
+  micro_batch_size: 8
+  global_batch_size: 64
   tensor_model_parallel_size: 2
-  pipeline_model_parallel_size: 4
+  pipeline_model_parallel_size: 1
   virtual_pipeline_model_parallel_size: null # interleaved pipeline
   resume_from_checkpoint: null # manually set the checkpoint file to load from
 
@@ -48,8 +48,8 @@ model:
     type: 'GPT2BPETokenizer'
     model: null
     delimiter: null # only used for tabular tokenizer
-    vocab_file: "/lustre/fsw/bignlp/jiemingz/bpe/vocab.json"
-    merge_file: "/lustre/fsw/bignlp/jiemingz/bpe/merges.txt"
+    vocab_file: "/pretrained_models/megatron_gpt_5b/tp2_pp1/megatron_gpt_extracted/0cc20042605a4254a5c89b884e959df9_vocab.json"
+    merge_file: "/pretrained_models/megatron_gpt_5b/tp2_pp1/megatron_gpt_extracted/1e7bdeb5a59944dbb51f51df58d01904_merges.txt"
 
   # precision
   native_amp_init_scale: 4294967296 # 2 ** 32
@@ -70,7 +70,7 @@ model:
   fp8_amax_history_len: 32
   fp8_amax_compute_algo: "max"
   reduce_amax: True
-
+  
   # miscellaneous
   seed: 1234
   sync_batch_comm: False
